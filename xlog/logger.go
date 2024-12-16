@@ -48,9 +48,13 @@ func (l *Logger) ContextLogger(ctx map[string]interface{}) *Logger {
 }
 
 func NewLogger(cfg LoggerConfig) *Logger {
+	// Set default logger name if empty
 	if cfg.LoggerName == "" {
 		cfg.LoggerName = DefaultLoggerName
 	}
 	zl := newZeroLogger(cfg)
-	return &Logger{zeroLoger: &zl, Config: cfg}
+	return &Logger{
+		zeroLoger: &zl, 
+		Config: cfg,  // This will now contain the updated LoggerName
+	}
 }

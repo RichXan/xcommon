@@ -78,10 +78,11 @@ func TestLoggerConfig(t *testing.T) {
 			Level:       "debug",
 			Directory:   "../../logs",
 			ProjectName: "test",
+			// LoggerName is intentionally empty to test default value
 		}
 
 		logger := NewLogger(cfg)
 		assert.NotNil(t, logger)
-		assert.Equal(t, DefaultLoggerName, cfg.LoggerName)
+		assert.Equal(t, "x_logger", logger.Config.LoggerName)
 	})
 }
