@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/richxan/xpkg/xlog"
+	"github.com/richxan/xcommon/xlog"
 
 	"github.com/gin-gonic/gin"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	auth "github.com/richxan/xpkg/xauth"
+	"github.com/richxan/xcommon/xauth"
 )
 
 // Auth 认证中间件
@@ -28,9 +28,9 @@ func Auth() gin.HandlerFunc {
 		}
 
 		// 解析token
-		claims, err := auth.ParseAccessToken(parts[1])
+		claims, err := xauth.ParseAccessToken(parts[1])
 		if err != nil {
-			if err == auth.ErrExpiredToken {
+			if err == xauth.ErrExpiredToken {
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"error": "Token has expired",
 					"code":  "token_expired",
@@ -80,7 +80,7 @@ func OptionalAuth() gin.HandlerFunc {
 			return
 		}
 
-		claims, err := auth.ParseAccessToken(parts[1])
+		claims, err := xauth.ParseAccessToken(parts[1])
 		if err != nil {
 			c.Next()
 			return

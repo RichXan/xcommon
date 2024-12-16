@@ -3,7 +3,7 @@ package xhttp
 import (
 	"net/http"
 
-	"github.com/richxan/xpkg/xerror"
+	"github.com/richxan/xcommon/xerror"
 
 	"github.com/gin-gonic/gin"
 )

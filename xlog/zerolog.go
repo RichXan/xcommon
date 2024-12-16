@@ -7,7 +7,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/richxan/xpkg/xutil"
+	"github.com/richxan/xcommon/xutil"
 
 	"github.com/rs/zerolog"
 	"gopkg.in/natefinch/lumberjack.v2"

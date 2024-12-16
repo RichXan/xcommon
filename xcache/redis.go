@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/richxan/xpkg/xlog"
+	"github.com/richxan/xcommon/xlog"
 
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
