@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/richxan/xcommon/xauth"
+	"github.com/RichXan/xcommon/xauth"
 )
 
 // Auth 认证中间件

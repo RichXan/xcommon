@@ -1,4 +1,4 @@
-module github.com/richxan/xcommon
+module github.com/RichXan/xcommon
 
 go 1.22
 
