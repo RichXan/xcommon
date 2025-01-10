@@ -3,6 +3,7 @@ package xutil
 import (
 	"reflect"
 	"strings"
+	"unicode"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -13,20 +14,27 @@ import (
 type Operator string
 
 const (
-	OpEq    Operator = "="
-	OpIn    Operator = "IN"
-	OpLike  Operator = "LIKE"
-	OpGt    Operator = ">"
-	OpLt    Operator = "<"
-	OpGte   Operator = ">="
-	OpLte   Operator = "<="
-	OpNotEq Operator = "!="
+	OpEq      Operator = "="
+	OpIn      Operator = "IN"
+	OpLike    Operator = "LIKE"
+	OpGt      Operator = ">"
+	OpLt      Operator = "<"
+	OpGte     Operator = ">="
+	OpLte     Operator = "<="
+	OpNotEq   Operator = "!="
+	OpDateGt  Operator = "DATE >"  // 晚于某日期
+	OpDateLt  Operator = "DATE <"  // 早于某日期
+	OpDateGte Operator = "DATE >=" // 晚于或等于某日期
+	OpDateLte Operator = "DATE <=" // 早于或等于某日期
+	OpDateEq  Operator = "DATE ="  // 等于某日期
+	OpDateNe  Operator = "DATE !=" // 不等于某日期
 )
 
 // QueryOption 查询选项
 type QueryOption struct {
-	Operator Operator
-	Value    interface{}
+	Operator    Operator
+	Value       interface{}
+	NoSnakeCase bool // 是否禁用下划线转换，默认false表示使用下划线形式
 }
 
 // BuildQueryByModel 通用的查询构建器，根据模型的非零值构建查询条件
@@ -36,7 +44,32 @@ func BuildQueryByModel[T any](db *gorm.DB, model *T, options map[string]QueryOpt
 	// 首先处理 options 中的查询条件
 	if len(options) > 0 {
 		for fieldName, opt := range options {
-			columnName := getColumnName("", fieldName)
+			// 跳过空值
+			if isEmptyValue(opt.Value) {
+				continue
+			}
+
+			// 获取结构体字段对应的数据库列名
+			var columnName string
+			if t := reflect.TypeOf(model).Elem(); t.Kind() == reflect.Struct {
+				if field, found := t.FieldByName(fieldName); found {
+					columnName = getColumnName(field.Tag.Get("gorm"), fieldName)
+				} else {
+					// 如果在结构体中找不到该字段，根据 NoSnakeCase 选项决定是否转换为下划线形式
+					if opt.NoSnakeCase {
+						columnName = fieldName
+					} else {
+						columnName = toSnakeCase(fieldName)
+					}
+				}
+			} else {
+				if opt.NoSnakeCase {
+					columnName = fieldName
+				} else {
+					columnName = toSnakeCase(fieldName)
+				}
+			}
+
 			query = buildQueryWithOperator(query, columnName, opt.Operator, opt.Value)
 		}
 	}
@@ -101,6 +134,18 @@ func buildQueryWithOperator(query *gorm.DB, column string, op Operator, value in
 		return query.Where(column+" <= ?", value)
 	case OpNotEq:
 		return query.Where(column+" != ?", value)
+	case OpDateGt:
+		return query.Where("DATE("+column+") > DATE(?)", value)
+	case OpDateLt:
+		return query.Where("DATE("+column+") < DATE(?)", value)
+	case OpDateGte:
+		return query.Where("DATE("+column+") >= DATE(?)", value)
+	case OpDateLte:
+		return query.Where("DATE("+column+") <= DATE(?)", value)
+	case OpDateEq:
+		return query.Where("DATE("+column+") = DATE(?)", value)
+	case OpDateNe:
+		return query.Where("DATE("+column+") != DATE(?)", value)
 	default: // OpEq
 		return query.Where(column+" = ?", value)
 	}
@@ -132,18 +177,18 @@ func isZeroValue(v reflect.Value) bool {
 
 // getColumnName 从gorm标签或字段名获取数据库列名
 func getColumnName(gormTag string, fieldName string) string {
-	if gormTag == "" {
-		return toCamelCase(fieldName)
-	}
-
-	tags := strings.Split(gormTag, ";")
-	for _, tag := range tags {
-		if strings.HasPrefix(tag, "column:") {
-			return strings.TrimPrefix(tag, "column:")
+	// 首先尝试从gorm标签获取列名
+	if gormTag != "" {
+		tags := strings.Split(gormTag, ";")
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, "column:") {
+				return strings.TrimPrefix(tag, "column:")
+			}
 		}
 	}
 
-	return toCamelCase(fieldName)
+	// 如果没有column标签，则将驼峰命名转换为下划线命名
+	return toSnakeCase(fieldName)
 }
 
 // 将蛇形命名转换为驼峰命名
@@ -156,16 +201,18 @@ func toCamelCase(s string) string {
 	return strings.Join(words, "")
 }
 
-// toSnakeCase 将驼峰命名转换为蛇形命名
+// toSnakeCase 将驼峰命名转换为下划线命名
 func toSnakeCase(s string) string {
 	var result strings.Builder
 	for i, r := range s {
 		if i > 0 && r >= 'A' && r <= 'Z' {
 			result.WriteRune('_')
+			result.WriteRune(unicode.ToLower(r))
+		} else {
+			result.WriteRune(unicode.ToLower(r))
 		}
-		result.WriteRune(r)
 	}
-	return strings.ToLower(result.String())
+	return result.String()
 }
 
 // 保留字列表
@@ -190,4 +237,37 @@ func contains(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+// isEmptyValue 检查值是否为空
+func isEmptyValue(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+
+	value := reflect.ValueOf(v)
+	switch value.Kind() {
+	case reflect.String:
+		return value.String() == ""
+	case reflect.Slice, reflect.Map, reflect.Array:
+		return value.Len() == 0
+	case reflect.Ptr:
+		if value.IsNil() {
+			return true
+		}
+		return isEmptyValue(value.Elem().Interface())
+	case reflect.Interface:
+		if value.IsNil() {
+			return true
+		}
+		return isEmptyValue(value.Elem().Interface())
+	case reflect.Struct:
+		// 处理decimal类型
+		if value.Type().String() == "decimal.Decimal" {
+			return value.MethodByName("String").Call(nil)[0].String() == "0"
+		}
+		return value.IsZero()
+	default:
+		return value.IsZero()
+	}
 }

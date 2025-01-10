@@ -2,6 +2,7 @@ package xutil
 
 import (
 	"reflect"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -20,13 +21,41 @@ func BuildUpdateByModel[T any](db *gorm.DB, model *T, opt *UpdateOption) *gorm.D
 	val := reflect.ValueOf(model).Elem()
 	typ := val.Type()
 
-	// 构建更新字段
+	// 处理所有字段，包括嵌入式结构体
+	processFields(val, typ, "", updates, opt)
+
+	// 添加更新条件
+	if opt != nil && len(opt.Condition) > 0 {
+		for fieldName, queryOpt := range opt.Condition {
+			// 跳过空值条件
+			if isEmptyValue(queryOpt.Value) {
+				continue
+			}
+
+			columnName := extractColumnName("", fieldName)
+			query = buildQueryWithOperator(query, columnName, queryOpt.Operator, queryOpt.Value)
+		}
+	}
+
+	return query.Updates(updates)
+}
+
+// processFields 处理结构体字段，包括嵌入式结构体
+func processFields(val reflect.Value, typ reflect.Type, prefix string, updates map[string]interface{}, opt *UpdateOption) {
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
 		fieldType := typ.Field(i)
 
 		// 跳过未导出的字段
 		if !field.CanInterface() {
+			continue
+		}
+
+		// 如果是嵌入式结构体，递归处理
+		if fieldType.Anonymous {
+			if field.Kind() == reflect.Struct {
+				processFields(field, field.Type(), prefix, updates, opt)
+			}
 			continue
 		}
 
@@ -37,7 +66,7 @@ func BuildUpdateByModel[T any](db *gorm.DB, model *T, opt *UpdateOption) *gorm.D
 		}
 
 		// 获取列名
-		columnName := getColumnName(gormTag, fieldType.Name)
+		columnName := extractColumnName(gormTag, fieldType.Name)
 
 		// 如果指定了要更新的字段，则只更新指定字段
 		if opt != nil && len(opt.Fields) > 0 {
@@ -53,14 +82,20 @@ func BuildUpdateByModel[T any](db *gorm.DB, model *T, opt *UpdateOption) *gorm.D
 			updates[columnName] = field.Interface()
 		}
 	}
+}
 
-	// 添加更新条件
-	if opt != nil && len(opt.Condition) > 0 {
-		for fieldName, queryOpt := range opt.Condition {
-			columnName := getColumnName("", fieldName)
-			query = buildQueryWithOperator(query, columnName, queryOpt.Operator, queryOpt.Value)
+// extractColumnName 从gorm标签或字段名获取列名
+func extractColumnName(gormTag string, fieldName string) string {
+	if gormTag == "" {
+		return fieldName
+	}
+
+	tags := strings.Split(gormTag, ";")
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, "column:") {
+			return strings.TrimPrefix(tag, "column:")
 		}
 	}
 
-	return query.Updates(updates)
+	return fieldName
 }
