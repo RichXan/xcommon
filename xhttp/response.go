@@ -26,9 +26,10 @@ type APIResponse struct {
 // Success 成功响应
 func Success(c *gin.Context, data interface{}) {
 	resp := &APIResponse{
+		Data:    data,
+		Status:  true,
 		Code:    xerror.Success.Code,
 		Message: xerror.Success.Message,
-		Data:    data,
 	}
 	if traceID := c.GetString("trace_id"); traceID != "" {
 		resp.TraceID = traceID
