@@ -70,8 +70,6 @@ func getHTTPStatus(code int) int {
 		return http.StatusUnauthorized
 	case xerror.Forbidden.Code:
 		return http.StatusForbidden
-	case xerror.NotFound.Code:
-		return http.StatusNotFound
 	case xerror.MethodNotAllow.Code:
 		return http.StatusMethodNotAllowed
 	case xerror.TooManyRequests.Code:
@@ -84,6 +82,18 @@ func getHTTPStatus(code int) int {
 	}
 }
 
+func NewResponse(err *xerror.Error) *APIResponse {
+	status := false
+	if err.Code == 0 {
+		status = true
+	}
+	return &APIResponse{
+		Status:  status,
+		Code:    err.Code,
+		Message: err.Message,
+	}
+}
+
 func NewResponseMessage(err *xerror.Error, message string) *APIResponse {
 	status := false
 	if err.Code == 0 {
@@ -93,6 +103,19 @@ func NewResponseMessage(err *xerror.Error, message string) *APIResponse {
 		Status:  status,
 		Code:    err.Code,
 		Message: err.Message + " : " + message,
+	}
+}
+
+func NewResponseData(err *xerror.Error, data interface{}) *APIResponse {
+	status := false
+	if err.Code == 0 {
+		status = true
+	}
+	return &APIResponse{
+		Status:  status,
+		Code:    err.Code,
+		Message: err.Message,
+		Data:    data,
 	}
 }
 

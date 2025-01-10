@@ -16,7 +16,7 @@ func (e *Error) Error() string {
 }
 
 // New 创建新的错误
-func NewError(code int, message string) *Error {
+func New(code int, message string) *Error {
 	// 预定义错误码
 	// if _, ok := codes[code]; ok {
 	// 	panic(fmt.Sprintf("code %d already exists", code))
@@ -31,7 +31,7 @@ func NewError(code int, message string) *Error {
 // Wrap 包装错误
 func Wrap(err error, code int, message string) *Error {
 	if err == nil {
-		return NewError(code, message)
+		return New(code, message)
 	}
-	return NewError(code, fmt.Sprintf("%s: %v", message, err))
+	return New(code, fmt.Sprintf("%s: %v", message, err))
 }
