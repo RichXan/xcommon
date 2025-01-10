@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/RichXan/xcommon/xerror"
@@ -8,17 +9,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Response 标准响应结构
-type Response struct {
-	Code    int         `json:"code"`               // 错误码
-	Message string      `json:"message"`            // 错误信息
+// APIResponse 标准响应结构
+type APIResponse struct {
+	Code    int         `json:"code"`               // 业务编码
+	Status  bool        `json:"status"`             // 请求是否成功
+	Message string      `json:"message,omitempty"`  // 错误描述
+	Current int         `json:"current,omitempty"`  // 当前页码
+	Size    int         `json:"size,omitempty"`     // 当前页数量
+	PerPage int         `json:"per_page,omitempty"` // 每页数量
+	Total   int64       `json:"total,omitempty"`    // 总数量
 	Data    interface{} `json:"data,omitempty"`     // 数据
+	Order   string      `json:"order,omitempty"`    // 排序字段
 	TraceID string      `json:"trace_id,omitempty"` // 追踪ID
 }
 
 // Success 成功响应
 func Success(c *gin.Context, data interface{}) {
-	resp := &Response{
+	resp := &APIResponse{
 		Code:    xerror.Success.Code,
 		Message: xerror.Success.Message,
 		Data:    data,
@@ -31,14 +38,14 @@ func Success(c *gin.Context, data interface{}) {
 
 // Error 错误响应
 func Error(c *gin.Context, err error) {
-	var resp *Response
+	var resp *APIResponse
 	if e, ok := err.(*xerror.Error); ok {
-		resp = &Response{
+		resp = &APIResponse{
 			Code:    e.Code,
 			Message: e.Message,
 		}
 	} else {
-		resp = &Response{
+		resp = &APIResponse{
 			Code:    xerror.SystemError.Code,
 			Message: err.Error(),
 		}
@@ -77,35 +84,62 @@ func getHTTPStatus(code int) int {
 	}
 }
 
-// List 列表响应
-type List struct {
-	Total int64       `json:"total"` // 总数
-	Items interface{} `json:"items"` // 数据列表
-}
-
-// Page 分页响应
-type Page struct {
-	List
-	Page     int `json:"page"`      // 当前页码
-	PageSize int `json:"page_size"` // 每页数量
-}
-
-// NewList 创建列表响应
-func NewList(total int64, items interface{}) *List {
-	return &List{
-		Total: total,
-		Items: items,
+func NewResponseMessage(err *xerror.Error, message string) *APIResponse {
+	status := false
+	if err.Code == 0 {
+		status = true
+	}
+	return &APIResponse{
+		Status:  status,
+		Code:    err.Code,
+		Message: err.Message + " : " + message,
 	}
 }
 
-// NewPage 创建分页响应
-func NewPage(page, pageSize int, total int64, items interface{}) *Page {
-	return &Page{
-		List: List{
-			Total: total,
-			Items: items,
-		},
-		Page:     page,
-		PageSize: pageSize,
+func (res *APIResponse) WithData(data interface{}) *APIResponse {
+	res.Data = data
+	return res
+}
+
+func (res *APIResponse) WithTraceID(traceID string) *APIResponse {
+	res.TraceID = traceID
+	return res
+}
+
+func (res *APIResponse) WithMessage(msg string) *APIResponse {
+	res.Message = msg
+	return res
+}
+
+func (res *APIResponse) WithTotal(total int64) *APIResponse {
+	res.Total = total
+	return res
+}
+
+func (res *APIResponse) WithSize(size int) *APIResponse {
+	res.Size = size
+	return res
+}
+
+func (res *APIResponse) WithCurrent(current int) *APIResponse {
+	res.Current = current
+	return res
+}
+
+func (res *APIResponse) WithPerPage(perPage int) *APIResponse {
+	res.PerPage = perPage
+	return res
+}
+
+// ToString 返回 JSON 格式的错误详情
+func (res *APIResponse) ToString() string {
+	err := &APIResponse{
+		Code:    res.Code,
+		Message: res.Message,
+		Data:    res.Data,
+		TraceID: res.TraceID,
 	}
+
+	raw, _ := json.Marshal(err)
+	return string(raw)
 }
