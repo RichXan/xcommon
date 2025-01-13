@@ -1,9 +1,18 @@
 package xhttp
 
 type PageReq struct {
-	Current int    `json:"current" form:"current"` // 当前页
-	Size    int    `json:"size" form:"size"`       // 每页大小
-	Order   string `json:"order" form:"order"`     // 排序字段
+	Current int    `json:"current" form:"current" binding:"omitempty,min=1" default:"1"` // 当前页
+	Size    int    `json:"size" form:"size" binding:"omitempty,min=1" default:"10"`      // 每页大小
+	Order   string `json:"order" form:"order"`                                           // 排序字段
+}
+
+func (p *PageReq) SetDefault() {
+	if p.Current <= 0 {
+		p.Current = 1
+	}
+	if p.Size <= 0 {
+		p.Size = 10
+	}
 }
 
 func (p PageReq) GetCurrent() int {
