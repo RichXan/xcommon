@@ -65,8 +65,6 @@ func getHTTPStatus(code int) int {
 	switch code {
 	case xerror.Success.Code:
 		return http.StatusOK
-	case xerror.ParamError.Code:
-		return http.StatusBadRequest
 	case xerror.Unauthorized.Code:
 		return http.StatusUnauthorized
 	case xerror.Forbidden.Code:
@@ -76,10 +74,7 @@ func getHTTPStatus(code int) int {
 	case xerror.TooManyRequests.Code:
 		return http.StatusTooManyRequests
 	default:
-		if code >= 500 {
-			return http.StatusInternalServerError
-		}
-		return http.StatusBadRequest
+		return http.StatusOK
 	}
 }
 

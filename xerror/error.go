@@ -12,7 +12,7 @@ var codes = map[int]string{}
 
 // Error 实现 error 接口
 func (e *Error) Error() string {
-	return fmt.Sprintf("code: %d, message: %s", e.Code, e.Message)
+	return e.Message
 }
 
 // New 创建新的错误
@@ -33,5 +33,5 @@ func Wrap(err error, code int, message string) *Error {
 	if err == nil {
 		return New(code, message)
 	}
-	return New(code, fmt.Sprintf("%s: %v", message, err))
+	return New(code, fmt.Sprintf("%s: %s", err.Error(), message))
 }
