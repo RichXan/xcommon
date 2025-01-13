@@ -25,6 +25,18 @@ type MySQLConfig struct {
 	IsConsole       bool   `yaml:"is_console"`
 }
 
+type PostgresConfig struct {
+	URI       string `yaml:"uri"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	User      string `yaml:"user"`
+	DBName    string `yaml:"dbname"`
+	Password  string `yaml:"password"`
+	SSLMode   string `yaml:"sslmode"`
+	TimeZone  string `yaml:"timeZone"`
+	IsConsole bool   `yaml:"is_console"`
+}
+
 // NewMySQLGormDb 创建MySQL客户端
 func NewMySQLGormDb(config *MySQLConfig) (e *gorm.DB, err error) {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?%s",
@@ -72,6 +84,38 @@ func NewMySQLGormDb(config *MySQLConfig) (e *gorm.DB, err error) {
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true,
 		},
+	})
+}
+
+func NewPostgresGormDb(config *PostgresConfig) (e *gorm.DB, err error) {
+	dsn := fmt.Sprintf("host=%s port=%d user=%s dbname=%s password=%s sslmode=%s TimeZone=%s",
+		config.Host,
+		config.Port,
+		config.User,
+		config.DBName,
+		config.Password,
+		config.SSLMode,
+		config.TimeZone,
+	)
+
+	loggerLevel := logger.Silent
+	if config.IsConsole {
+		loggerLevel = logger.Info
+	}
+	return gorm.Open(postgres.New(postgres.Config{
+		DSN: dsn,
+	}), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true,
+		},
+		Logger: logger.New(
+			log.New(log.Writer(), "\r\n", log.LstdFlags),
+			logger.Config{
+				LogLevel:      loggerLevel,
+				Colorful:      true,
+				SlowThreshold: time.Second,
+			},
+		),
 	})
 }
 
