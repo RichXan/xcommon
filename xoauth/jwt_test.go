@@ -1,0 +1,168 @@
+package xoauth
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const (
+	testUserID   = "test_user_123"
+	testUsername = "test_user"
+	testKeyDir   = "test_keys"
+)
+
+func TestMain(m *testing.M) {
+	// 运行测试
+	code := m.Run()
+
+	// 清理测试密钥目录
+	os.RemoveAll(testKeyDir)
+
+	os.Exit(code)
+}
+
+func TestNewClaims(t *testing.T) {
+	claims := NewClaims()
+	assert.NotNil(t, claims)
+}
+
+func TestKeyPairOperations(t *testing.T) {
+	// 测试生成密钥对
+	claims := NewClaims()
+	err := claims.GenerateKeyPair()
+	require.NoError(t, err)
+	assert.NotNil(t, claims.privateKey)
+	assert.NotNil(t, claims.publicKey)
+
+	// 创建测试目录
+	err = os.MkdirAll(testKeyDir, 0700)
+	require.NoError(t, err)
+
+	// 测试保存密钥对
+	err = claims.SaveKeyPair(testKeyDir)
+	require.NoError(t, err)
+
+	// 验证文件是否存在
+	privateKeyPath := filepath.Join(testKeyDir, "private.pem")
+	publicKeyPath := filepath.Join(testKeyDir, "public.pem")
+	assert.FileExists(t, privateKeyPath)
+	assert.FileExists(t, publicKeyPath)
+
+	// 测试加载密钥对
+	newClaims := NewClaims()
+	err = newClaims.LoadKeyPair(testKeyDir)
+	require.NoError(t, err)
+	assert.NotNil(t, newClaims.privateKey)
+	assert.NotNil(t, newClaims.publicKey)
+}
+
+func TestGenerateAndValidateTokenPair(t *testing.T) {
+	claims := NewClaims()
+	err := claims.GenerateKeyPair()
+	require.NoError(t, err)
+
+	// 生成token对
+	tokenPair, err := claims.GenerateTokenPair(testUserID, testUsername)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tokenPair.AccessToken)
+	assert.NotEmpty(t, tokenPair.RefreshToken)
+
+	// 验证访问令牌
+	assert.True(t, claims.ValidateAccessToken(tokenPair.AccessToken))
+
+	// 解析访问令牌
+	parsedClaims, err := claims.ParseAccessToken(tokenPair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, testUserID, parsedClaims.UserID)
+	assert.Equal(t, testUsername, parsedClaims.Username)
+}
+
+func TestRefreshTokenPair(t *testing.T) {
+	claims := NewClaims()
+	err := claims.GenerateKeyPair()
+	require.NoError(t, err)
+
+	// 生成初始token对
+	originalPair, err := claims.GenerateTokenPair(testUserID, testUsername)
+	require.NoError(t, err)
+
+	// 使用刷新令牌生成新的token对
+	newPair, err := claims.RefreshTokenPair(originalPair.RefreshToken)
+	require.NoError(t, err)
+	assert.NotEmpty(t, newPair.AccessToken)
+	assert.NotEmpty(t, newPair.RefreshToken)
+	assert.NotEqual(t, originalPair.AccessToken, newPair.AccessToken)
+}
+
+func TestTokenExpirationScenario(t *testing.T) {
+	claims := NewClaims()
+	err := claims.GenerateKeyPair()
+	require.NoError(t, err)
+
+	// 生成一个短期token
+	shortLivedClaims := Claims{
+		UserID:   testUserID,
+		Username: testUsername,
+		TokenID:  uuid.New().String(),
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "xan",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, shortLivedClaims)
+	tokenString, err := token.SignedString(claims.privateKey)
+	require.NoError(t, err)
+
+	// 等待令牌过期
+	time.Sleep(2 * time.Second)
+
+	// 验证过期的访问令牌
+	_, err = claims.ParseAccessToken(tokenString)
+	assert.ErrorIs(t, err, ErrExpiredToken)
+}
+
+func TestInvalidToken(t *testing.T) {
+	claims := NewClaims()
+	err := claims.GenerateKeyPair()
+	require.NoError(t, err)
+
+	// 测试无效的token
+	_, err = claims.ParseAccessToken("invalid.token.string")
+	assert.Error(t, err)
+
+	// 测试空token
+	_, err = claims.ParseAccessToken("")
+	assert.Error(t, err)
+}
+
+func TestNewClaimsWithKeyPair(t *testing.T) {
+	// 首先生成一个密钥对
+	originalClaims := NewClaims()
+	err := originalClaims.GenerateKeyPair()
+	require.NoError(t, err)
+
+	// 使用生成的密钥对创建新的Claims实例
+	newClaims := NewClaimsWithKeyPair(originalClaims.privateKey, originalClaims.publicKey)
+	require.NotNil(t, newClaims)
+
+	// 验证新实例可以正常使用
+	tokenPair, err := newClaims.GenerateTokenPair(testUserID, testUsername)
+	require.NoError(t, err)
+	assert.NotEmpty(t, tokenPair.AccessToken)
+
+	// 验证token
+	parsedClaims, err := newClaims.ParseAccessToken(tokenPair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, testUserID, parsedClaims.UserID)
+	assert.Equal(t, testUsername, parsedClaims.Username)
+}
