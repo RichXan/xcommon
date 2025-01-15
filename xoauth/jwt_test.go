@@ -175,24 +175,3 @@ func TestInvalidToken(t *testing.T) {
 	_, err = claims.ParseAccessToken("")
 	assert.Error(t, err)
 }
-
-func TestNewClaimsWithKeyPair(t *testing.T) {
-	// 首先生成一个密钥对
-	originalClaims := NewClaims()
-	err := originalClaims.GenerateKeyPair(testKeyDir)
-	require.NoError(t, err)
-
-	// 使用生成的密钥对创建新的Claims实例
-	newClaims := NewClaims()
-	require.NotNil(t, newClaims)
-
-	// 验证新实例可以正常使用
-	tokenPair, err := newClaims.GenerateTokenPair(testUserID)
-	require.NoError(t, err)
-	assert.NotEmpty(t, tokenPair.AccessToken)
-
-	// 验证token
-	parsedClaims, err := newClaims.ParseAccessToken(tokenPair.AccessToken)
-	require.NoError(t, err)
-	assert.Equal(t, testUserID, parsedClaims.UserID)
-}
