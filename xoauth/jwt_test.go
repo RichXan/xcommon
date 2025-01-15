@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,16 +14,55 @@ import (
 const (
 	testUserID   = "test_user_123"
 	testUsername = "test_user"
-	testKeyDir   = "test_keys"
+	testKeyDir   = "./test_keys"
 )
 
+func TestSaveKeyPair(t *testing.T) {
+	claims := NewClaims()
+	err := claims.GenerateKeyPair(testKeyDir)
+	require.NoError(t, err)
+
+	// 验证文件内容
+	privateKeyPath := filepath.Join(testKeyDir, "private.pem")
+	publicKeyPath := filepath.Join(testKeyDir, "public.pem")
+
+	privateKeyData, err := os.ReadFile(privateKeyPath)
+	require.NoError(t, err)
+	assert.NotEmpty(t, privateKeyData)
+
+	publicKeyData, err := os.ReadFile(publicKeyPath)
+	require.NoError(t, err)
+	assert.NotEmpty(t, publicKeyData)
+
+	assert.NotNil(t, claims.privateKey)
+	assert.NotNil(t, claims.publicKey)
+}
+
+func TestNewClaimsWithKeyPairFromPEMFile(t *testing.T) {
+	claims, err := NewClaimsWithKeyPairFromPEMFile(testKeyDir+"/private.pem", testKeyDir+"/public.pem")
+	require.NoError(t, err)
+	assert.NotNil(t, claims)
+}
+
+func TestNewClaimsWithKeyPairFromPEM(t *testing.T) {
+	privateKeyBytes, err := os.ReadFile(testKeyDir + "/private.pem")
+	require.NoError(t, err)
+	assert.NotEmpty(t, privateKeyBytes)
+
+	publicKeyBytes, err := os.ReadFile(testKeyDir + "/public.pem")
+	require.NoError(t, err)
+	assert.NotEmpty(t, publicKeyBytes)
+
+	claims, err := NewClaimsWithKeyPairFromPEM(privateKeyBytes, publicKeyBytes)
+	require.NoError(t, err)
+	assert.NotNil(t, claims)
+}
+
 func TestMain(m *testing.M) {
-	// 运行测试
 	code := m.Run()
-
-	// 清理测试密钥目录
-	os.RemoveAll(testKeyDir)
-
+	// 注释掉清理代码
+	// os.Remove(testKeyDir + "/private.pem")
+	// os.Remove(testKeyDir + "/public.pem")
 	os.Exit(code)
 }
 
@@ -36,17 +74,13 @@ func TestNewClaims(t *testing.T) {
 func TestKeyPairOperations(t *testing.T) {
 	// 测试生成密钥对
 	claims := NewClaims()
-	err := claims.GenerateKeyPair()
+	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 	assert.NotNil(t, claims.privateKey)
 	assert.NotNil(t, claims.publicKey)
 
 	// 创建测试目录
 	err = os.MkdirAll(testKeyDir, 0700)
-	require.NoError(t, err)
-
-	// 测试保存密钥对
-	err = claims.SaveKeyPair(testKeyDir)
 	require.NoError(t, err)
 
 	// 验证文件是否存在
@@ -57,7 +91,7 @@ func TestKeyPairOperations(t *testing.T) {
 
 	// 测试加载密钥对
 	newClaims := NewClaims()
-	err = newClaims.LoadKeyPair(testKeyDir)
+	err = newClaims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 	assert.NotNil(t, newClaims.privateKey)
 	assert.NotNil(t, newClaims.publicKey)
@@ -65,11 +99,11 @@ func TestKeyPairOperations(t *testing.T) {
 
 func TestGenerateAndValidateTokenPair(t *testing.T) {
 	claims := NewClaims()
-	err := claims.GenerateKeyPair()
+	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
 	// 生成token对
-	tokenPair, err := claims.GenerateTokenPair(testUserID, testUsername)
+	tokenPair, err := claims.GenerateTokenPair(testUserID)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tokenPair.AccessToken)
 	assert.NotEmpty(t, tokenPair.RefreshToken)
@@ -81,16 +115,15 @@ func TestGenerateAndValidateTokenPair(t *testing.T) {
 	parsedClaims, err := claims.ParseAccessToken(tokenPair.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, testUserID, parsedClaims.UserID)
-	assert.Equal(t, testUsername, parsedClaims.Username)
 }
 
 func TestRefreshTokenPair(t *testing.T) {
 	claims := NewClaims()
-	err := claims.GenerateKeyPair()
+	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
 	// 生成初始token对
-	originalPair, err := claims.GenerateTokenPair(testUserID, testUsername)
+	originalPair, err := claims.GenerateTokenPair(testUserID)
 	require.NoError(t, err)
 
 	// 使用刷新令牌生成新的token对
@@ -103,14 +136,12 @@ func TestRefreshTokenPair(t *testing.T) {
 
 func TestTokenExpirationScenario(t *testing.T) {
 	claims := NewClaims()
-	err := claims.GenerateKeyPair()
+	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
 	// 生成一个短期token
 	shortLivedClaims := Claims{
-		UserID:   testUserID,
-		Username: testUsername,
-		TokenID:  uuid.New().String(),
+		UserID: testUserID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -133,7 +164,7 @@ func TestTokenExpirationScenario(t *testing.T) {
 
 func TestInvalidToken(t *testing.T) {
 	claims := NewClaims()
-	err := claims.GenerateKeyPair()
+	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
 	// 测试无效的token
@@ -148,15 +179,15 @@ func TestInvalidToken(t *testing.T) {
 func TestNewClaimsWithKeyPair(t *testing.T) {
 	// 首先生成一个密钥对
 	originalClaims := NewClaims()
-	err := originalClaims.GenerateKeyPair()
+	err := originalClaims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
 	// 使用生成的密钥对创建新的Claims实例
-	newClaims := NewClaimsWithKeyPair(originalClaims.privateKey, originalClaims.publicKey)
+	newClaims := NewClaims()
 	require.NotNil(t, newClaims)
 
 	// 验证新实例可以正常使用
-	tokenPair, err := newClaims.GenerateTokenPair(testUserID, testUsername)
+	tokenPair, err := newClaims.GenerateTokenPair(testUserID)
 	require.NoError(t, err)
 	assert.NotEmpty(t, tokenPair.AccessToken)
 
@@ -164,5 +195,4 @@ func TestNewClaimsWithKeyPair(t *testing.T) {
 	parsedClaims, err := newClaims.ParseAccessToken(tokenPair.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, testUserID, parsedClaims.UserID)
-	assert.Equal(t, testUsername, parsedClaims.Username)
 }

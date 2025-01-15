@@ -21,7 +21,7 @@ var (
 
 const (
 	// AccessTokenExpiry 访问令牌过期时间
-	AccessTokenExpiry = 2 * time.Hour
+	AccessTokenExpiry = 1 * time.Hour
 	// RefreshTokenExpiry 刷新令牌过期时间
 	RefreshTokenExpiry = 7 * 24 * time.Hour
 	// MaxLoginAttempts 最大登录尝试次数
@@ -29,6 +29,9 @@ const (
 	// PEM类型常量
 	PrivateKeyPEMType = "PRIVATE KEY"
 	PublicKeyPEMType  = "PUBLIC KEY"
+
+	PrivateKeyFileName = "private.pem"
+	PublicKeyFileName  = "public.pem"
 )
 
 // TokenPair 访问令牌和刷新令牌对
@@ -39,9 +42,7 @@ type TokenPair struct {
 
 // Claims 自定义的 JWT Claims
 type Claims struct {
-	UserID   string `json:"user_id"`
-	Username string `json:"username"`
-	TokenID  string `json:"token_id"`
+	UserID string `json:"user_id"`
 	jwt.RegisteredClaims
 
 	// 密钥对 - 不导出且不序列化
@@ -54,15 +55,51 @@ func NewClaims() *Claims {
 	return &Claims{}
 }
 
-func NewClaimsWithKeyPair(privateKey ed25519.PrivateKey, publicKey ed25519.PublicKey) *Claims {
+func NewClaimsWithKeyPairFromPEM(privateKeyPEM, publicKeyPEM []byte) (*Claims, error) {
+	privateKey, publicKey, err := decodePEMBytes(privateKeyPEM, publicKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Claims{
 		privateKey: privateKey,
 		publicKey:  publicKey,
+	}, nil
+}
+
+func NewClaimsWithKeyPairFromPEMFile(privateKeyFile, publicKeyFile string) (*Claims, error) {
+	privateKeyBytes, err := os.ReadFile(privateKeyFile)
+	if err != nil {
+		return nil, err
 	}
+
+	publicKeyBytes, err := os.ReadFile(publicKeyFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewClaimsWithKeyPairFromPEM(privateKeyBytes, publicKeyBytes)
+}
+
+func decodePEMBytes(privateKeyPEMBytes, publicKeyPEMBytes []byte) (ed25519.PrivateKey, ed25519.PublicKey, error) {
+	privateKey, _ := pem.Decode(privateKeyPEMBytes)
+	if privateKey == nil {
+		return nil, nil, fmt.Errorf("failed to decode private key PEM")
+	}
+
+	publicKey, _ := pem.Decode(publicKeyPEMBytes)
+	if publicKey == nil {
+		return nil, nil, fmt.Errorf("failed to decode public key PEM")
+	}
+
+	if err := validateKeySize(privateKey.Bytes, publicKey.Bytes); err != nil {
+		return nil, nil, err
+	}
+	return ed25519.PrivateKey(privateKey.Bytes), ed25519.PublicKey(publicKey.Bytes), nil
 }
 
 // GenerateKeyPair 生成新的Ed25519密钥对
-func (c *Claims) GenerateKeyPair() error {
+func (c *Claims) GenerateKeyPair(dir string) error {
 	// 生成新的密钥对
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -73,17 +110,16 @@ func (c *Claims) GenerateKeyPair() error {
 	c.privateKey = privateKey
 	c.publicKey = publicKey
 
-	return nil
+	// 保存密钥对到文件
+	return c.saveKeyPair(dir)
 }
 
 // SaveKeyPair 将密钥对保存到文件
-func (c *Claims) SaveKeyPair(dir string) error {
-	// 确保目录存在
+func (c *Claims) saveKeyPair(dir string) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
 
-	// 创建PEM块
 	privatePEM := &pem.Block{
 		Type:  PrivateKeyPEMType,
 		Bytes: c.privateKey,
@@ -95,81 +131,35 @@ func (c *Claims) SaveKeyPair(dir string) error {
 	}
 
 	// 保存私钥
-	privateKeyFile := filepath.Join(dir, "private.pem")
-	privateKeyHandle, err := os.OpenFile(privateKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer privateKeyHandle.Close()
-
-	if err := pem.Encode(privateKeyHandle, privatePEM); err != nil {
+	if err := savePEMToFile(getKeyFilePath(dir, PrivateKeyFileName), privatePEM, 0600); err != nil {
 		return err
 	}
 
 	// 保存公钥
-	publicKeyFile := filepath.Join(dir, "public.pem")
-	publicKeyHandle, err := os.OpenFile(publicKeyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer publicKeyHandle.Close()
-
-	return pem.Encode(publicKeyHandle, publicPEM)
+	return savePEMToFile(getKeyFilePath(dir, PublicKeyFileName), publicPEM, 0644)
 }
 
-// LoadKeyPair 从文件加载密钥对
-func (c *Claims) LoadKeyPair(dir string) error {
-	// 读取私钥
-	privateKeyFile := filepath.Join(dir, "private.pem")
-	privateKeyBytes, err := os.ReadFile(privateKeyFile)
+func savePEMToFile(filePath string, pemBlock *pem.Block, perm os.FileMode) error {
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}
-
-	privatePEM, _ := pem.Decode(privateKeyBytes)
-	if privatePEM == nil {
-		return errors.New("failed to decode private key PEM")
-	}
-
-	// 读取公钥
-	publicKeyFile := filepath.Join(dir, "public.pem")
-	publicKeyBytes, err := os.ReadFile(publicKeyFile)
-	if err != nil {
-		return err
-	}
-
-	publicPEM, _ := pem.Decode(publicKeyBytes)
-	if publicPEM == nil {
-		return errors.New("failed to decode public key PEM")
-	}
-
-	// 验证密钥长度
-	if len(privatePEM.Bytes) != ed25519.PrivateKeySize {
-		return errors.New("invalid private key size")
-	}
-	if len(publicPEM.Bytes) != ed25519.PublicKeySize {
-		return errors.New("invalid public key size")
-	}
-
-	// 直接保存密钥
-	c.privateKey = ed25519.PrivateKey(privatePEM.Bytes)
-	c.publicKey = ed25519.PublicKey(publicPEM.Bytes)
-
-	return nil
+	defer file.Close()
+	return pem.Encode(file, pemBlock)
 }
 
 // GenerateTokenPair 生成访问令牌和刷新令牌对
-func (c *Claims) GenerateTokenPair(userID, username string) (*TokenPair, error) {
+func (c *Claims) GenerateTokenPair(userID string) (*TokenPair, error) {
 	tokenID := uuid.New().String()
 
 	// 生成访问令牌
-	accessToken, err := c.generateAccessToken(userID, username, tokenID)
+	accessToken, err := c.generateAccessToken(userID, tokenID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 生成刷新令牌
-	refreshToken, err := c.generateRefreshToken(userID, username, tokenID)
+	refreshToken, err := c.generateRefreshToken(userID, tokenID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,39 +171,17 @@ func (c *Claims) GenerateTokenPair(userID, username string) (*TokenPair, error) 
 }
 
 // generateAccessToken 生成访问令牌
-func (c *Claims) generateAccessToken(userID, username, tokenID string) (string, error) {
-	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		TokenID:  tokenID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "xan",
-			ID:        tokenID,
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
-	return token.SignedString(c.privateKey)
+func (c *Claims) generateAccessToken(userID, tokenID string) (string, error) {
+	claims := c.newTokenClaims(userID, tokenID, AccessTokenExpiry)
+	return c.generateToken(claims)
 }
 
-// generateRefreshToken 生成刷新令牌
-func (c *Claims) generateRefreshToken(userID, username, tokenID string) (string, error) {
-	claims := Claims{
-		UserID:   userID,
-		Username: username,
-		TokenID:  tokenID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(RefreshTokenExpiry)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "xan",
-			ID:        tokenID,
-		},
-	}
+func (c *Claims) generateRefreshToken(userID, tokenID string) (string, error) {
+	claims := c.newTokenClaims(userID, tokenID, RefreshTokenExpiry)
+	return c.generateToken(claims)
+}
 
+func (c *Claims) generateToken(claims Claims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 	return token.SignedString(c.privateKey)
 }
@@ -251,7 +219,7 @@ func (c *Claims) RefreshTokenPair(refreshToken string) (*TokenPair, error) {
 	}
 
 	// 生成新的令牌对
-	return c.GenerateTokenPair(claims.UserID, claims.Username)
+	return c.GenerateTokenPair(claims.UserID)
 }
 
 // ValidateToken 验证令牌
@@ -273,4 +241,32 @@ func (c *Claims) ParseRefreshToken(tokenString string) (*Claims, error) {
 // ValidateAccessToken 验证访问令牌
 func (c *Claims) ValidateAccessToken(tokenString string) bool {
 	return c.ValidateToken(tokenString)
+}
+
+func validateKeySize(privateKey, publicKey []byte) error {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return errors.New("invalid private key size")
+	}
+	if len(publicKey) != ed25519.PublicKeySize {
+		return errors.New("invalid public key size")
+	}
+	return nil
+}
+
+func getKeyFilePath(dir string, fileName string) string {
+	return filepath.Join(dir, fileName)
+}
+
+// 添加新的工具方法用于生成 Claims
+func (c *Claims) newTokenClaims(userID, tokenID string, expiry time.Duration) Claims {
+	return Claims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        tokenID,
+			Issuer:    "xan",
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
+		},
+	}
 }
