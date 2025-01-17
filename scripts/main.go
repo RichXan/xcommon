@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// 生成密钥对
-	claims := xoauth.NewClaims()
+	claims := xoauth.NewClaims(nil)
 	if err := claims.GenerateKeyPair(keysDir); err != nil {
 		log.Fatalf("%s生成密钥对失败: %v%s\n", colorRed, err, colorReset)
 	}

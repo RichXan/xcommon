@@ -20,9 +20,9 @@ var (
 
 const (
 	// AccessTokenExpiry 访问令牌过期时间
-	AccessTokenExpiry = 1 * time.Hour
+	AccessTokenExpiry = 2 * time.Hour
 	// RefreshTokenExpiry 刷新令牌过期时间
-	RefreshTokenExpiry = 7 * 24 * time.Hour
+	RefreshTokenExpiry = 2 * 24 * time.Hour
 	// MaxLoginAttempts 最大登录尝试次数
 	MaxLoginAttempts = 5
 	// PEM类型常量
@@ -46,14 +46,22 @@ type Info struct {
 	Data     any    `json:"data"`
 }
 
-// Claims 自定义的 JWT Claims
-type Claims struct {
-	Info
-	jwt.RegisteredClaims
+type Config struct {
+	TokenExpiryIn        time.Duration `json:"token_expiry_in"`
+	RefreshTokenExpiryIn time.Duration `json:"refresh_token_expiry_in"`
 
+	PrivateKey string `json:"private_key"`
+	PublicKey  string `json:"public_key"`
 	// 密钥对 - 不导出且不序列化
 	privateKey ed25519.PrivateKey `json:"-"`
 	publicKey  ed25519.PublicKey  `json:"-"`
+}
+
+// Claims 自定义的 JWT Claims
+type Claims struct {
+	Info
+	Config
+	jwt.RegisteredClaims
 }
 
 type Claim interface {
@@ -66,34 +74,42 @@ type Claim interface {
 }
 
 // NewClaims 创建新的Claims实例
-func NewClaims() Claim {
-	return &Claims{}
-}
+func NewClaims(config *Config) Claim {
 
-func NewClaimsWithKeyPairFromPEM(privateKeyPEM, publicKeyPEM []byte) (Claim, error) {
-	privateKey, publicKey, err := decodePEMBytes(privateKeyPEM, publicKeyPEM)
-	if err != nil {
-		return nil, err
+	if config.TokenExpiryIn == 0 {
+		config.TokenExpiryIn = AccessTokenExpiry
+	}
+	if config.RefreshTokenExpiryIn == 0 {
+		config.RefreshTokenExpiryIn = RefreshTokenExpiry
 	}
 
 	return &Claims{
-		privateKey: privateKey,
-		publicKey:  publicKey,
-	}, nil
+		Config: Config{
+			TokenExpiryIn:        AccessTokenExpiry,
+			RefreshTokenExpiryIn: RefreshTokenExpiry,
+		},
+	}
 }
 
-func NewClaimsWithKeyPairFromPEMFile(privateKeyFile, publicKeyFile string) (Claim, error) {
-	privateKeyBytes, err := os.ReadFile(privateKeyFile)
+func NewClaimsWithKeyPairFromPEM(config *Config) (Claim, error) {
+	privateKey, publicKey, err := decodePEMBytes([]byte(config.PrivateKey), []byte(config.PublicKey))
 	if err != nil {
 		return nil, err
 	}
 
-	publicKeyBytes, err := os.ReadFile(publicKeyFile)
-	if err != nil {
-		return nil, err
+	if config.TokenExpiryIn == 0 {
+		config.TokenExpiryIn = AccessTokenExpiry
+	}
+	if config.RefreshTokenExpiryIn == 0 {
+		config.RefreshTokenExpiryIn = RefreshTokenExpiry
 	}
 
-	return NewClaimsWithKeyPairFromPEM(privateKeyBytes, publicKeyBytes)
+	config.privateKey = privateKey
+	config.publicKey = publicKey
+
+	return &Claims{
+		Config: *config,
+	}, nil
 }
 
 func (c *Claims) GetPrivateKey() ed25519.PrivateKey {
@@ -239,12 +255,12 @@ func savePEMToFile(filePath string, pemBlock *pem.Block, perm os.FileMode) error
 
 // generateAccessToken 生成访问令牌
 func (c *Claims) generateAccessToken(info Info, tokenID string) (string, error) {
-	claims := c.newTokenClaims(info, tokenID, AccessTokenExpiry)
+	claims := c.newTokenClaims(info, tokenID, c.Config.TokenExpiryIn)
 	return c.generateToken(claims)
 }
 
 func (c *Claims) generateRefreshToken(info Info, tokenID string) (string, error) {
-	claims := c.newTokenClaims(info, tokenID, RefreshTokenExpiry)
+	claims := c.newTokenClaims(info, tokenID, c.Config.RefreshTokenExpiryIn)
 	return c.generateToken(claims)
 }
 

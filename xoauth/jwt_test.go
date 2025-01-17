@@ -18,7 +18,7 @@ const (
 )
 
 func TestSaveKeyPair(t *testing.T) {
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
@@ -38,12 +38,6 @@ func TestSaveKeyPair(t *testing.T) {
 	assert.NotNil(t, claims.GetPublicKey())
 }
 
-func TestNewClaimsWithKeyPairFromPEMFile(t *testing.T) {
-	claims, err := NewClaimsWithKeyPairFromPEMFile(testKeyDir+"/private.pem", testKeyDir+"/public.pem")
-	require.NoError(t, err)
-	assert.NotNil(t, claims)
-}
-
 func TestNewClaimsWithKeyPairFromPEM(t *testing.T) {
 	privateKeyBytes, err := os.ReadFile(testKeyDir + "/private.pem")
 	require.NoError(t, err)
@@ -53,7 +47,7 @@ func TestNewClaimsWithKeyPairFromPEM(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, publicKeyBytes)
 
-	claims, err := NewClaimsWithKeyPairFromPEM(privateKeyBytes, publicKeyBytes)
+	claims, err := NewClaimsWithKeyPairFromPEM(nil)
 	require.NoError(t, err)
 	assert.NotNil(t, claims)
 }
@@ -67,13 +61,13 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewClaims(t *testing.T) {
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	assert.NotNil(t, claims)
 }
 
 func TestKeyPairOperations(t *testing.T) {
 	// 测试生成密钥对
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 	assert.NotNil(t, claims.GetPrivateKey())
@@ -90,7 +84,7 @@ func TestKeyPairOperations(t *testing.T) {
 	assert.FileExists(t, publicKeyPath)
 
 	// 测试加载密钥对
-	newClaims := NewClaims()
+	newClaims := NewClaims(nil)
 	err = newClaims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 	assert.NotNil(t, newClaims.GetPrivateKey())
@@ -98,7 +92,7 @@ func TestKeyPairOperations(t *testing.T) {
 }
 
 func TestGenerateAndValidateTokenPair(t *testing.T) {
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
@@ -118,7 +112,7 @@ func TestGenerateAndValidateTokenPair(t *testing.T) {
 }
 
 func TestRefreshTokenPair(t *testing.T) {
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
@@ -138,7 +132,7 @@ func TestRefreshTokenPair(t *testing.T) {
 }
 
 func TestTokenExpirationScenario(t *testing.T) {
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
@@ -169,7 +163,7 @@ func TestTokenExpirationScenario(t *testing.T) {
 }
 
 func TestInvalidToken(t *testing.T) {
-	claims := NewClaims()
+	claims := NewClaims(nil)
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
 
