@@ -41,17 +41,18 @@ type TokenPair struct {
 
 // 保存的信息
 type Info struct {
+	Issuer   string `json:"issuer"`
 	UserID   string `json:"user_id"`
 	Username string `json:"username"`
 	Data     any    `json:"data"`
 }
 
 type Config struct {
-	TokenExpiryIn        time.Duration `json:"token_expiry_in"`
-	RefreshTokenExpiryIn time.Duration `json:"refresh_token_expiry_in"`
+	TokenExpiryHours        int `yaml:"token_expiry_hours" json:"token_expiry_hours"`
+	RefreshTokenExpiryHours int `yaml:"refresh_token_expiry_hours" json:"refresh_token_expiry_hours"`
 
-	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
+	PrivateKey string `yaml:"private_key" json:"private_key"`
+	PublicKey  string `yaml:"public_key" json:"public_key"`
 	// 密钥对 - 不导出且不序列化
 	privateKey ed25519.PrivateKey `json:"-"`
 	publicKey  ed25519.PublicKey  `json:"-"`
@@ -191,16 +192,16 @@ func (c *Claims) newTokenClaims(info Info, tokenID string, expiry time.Duration)
 func checkConfig(config *Config) *Config {
 	if config == nil {
 		return &Config{
-			TokenExpiryIn:        AccessTokenExpiry,
-			RefreshTokenExpiryIn: RefreshTokenExpiry,
+			TokenExpiryHours:        int(AccessTokenExpiry.Hours()),
+			RefreshTokenExpiryHours: int(RefreshTokenExpiry.Hours()),
 		}
 	}
 
-	if config.TokenExpiryIn == 0 {
-		config.TokenExpiryIn = AccessTokenExpiry
+	if config.TokenExpiryHours == 0 {
+		config.TokenExpiryHours = int(AccessTokenExpiry.Hours())
 	}
-	if config.RefreshTokenExpiryIn == 0 {
-		config.RefreshTokenExpiryIn = RefreshTokenExpiry
+	if config.RefreshTokenExpiryHours == 0 {
+		config.RefreshTokenExpiryHours = int(RefreshTokenExpiry.Hours())
 	}
 	return config
 }
@@ -258,12 +259,12 @@ func savePEMToFile(filePath string, pemBlock *pem.Block, perm os.FileMode) error
 
 // generateAccessToken 生成访问令牌
 func (c *Claims) generateAccessToken(info Info, tokenID string) (string, error) {
-	claims := c.newTokenClaims(info, tokenID, c.Config.TokenExpiryIn)
+	claims := c.newTokenClaims(info, tokenID, time.Duration(c.Config.TokenExpiryHours)*time.Hour)
 	return c.generateToken(claims)
 }
 
 func (c *Claims) generateRefreshToken(info Info, tokenID string) (string, error) {
-	claims := c.newTokenClaims(info, tokenID, c.Config.RefreshTokenExpiryIn)
+	claims := c.newTokenClaims(info, tokenID, time.Duration(c.Config.RefreshTokenExpiryHours)*time.Hour)
 	return c.generateToken(claims)
 }
 
