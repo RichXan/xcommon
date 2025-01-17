@@ -39,9 +39,16 @@ type TokenPair struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// 保存的信息
+type Info struct {
+	UserID   string `json:"user_id"`
+	Username string `json:"username"`
+	Data     any    `json:"data"`
+}
+
 // Claims 自定义的 JWT Claims
 type Claims struct {
-	UserID string `json:"user_id"`
+	Info
 	jwt.RegisteredClaims
 
 	// 密钥对 - 不导出且不序列化
@@ -53,7 +60,7 @@ type Claim interface {
 	GetPublicKey() ed25519.PublicKey
 	GetPrivateKey() ed25519.PrivateKey
 	GenerateKeyPair(dir string) error
-	GenerateTokenPair(userID string) (*TokenPair, error)
+	GenerateTokenPair(info Info) (*TokenPair, error)
 	RefreshTokenPair(refreshToken string) (*TokenPair, error)
 	ParseAccessToken(tokenString string) (*Claims, error)
 }
@@ -114,17 +121,17 @@ func (c *Claims) GenerateKeyPair(dir string) error {
 }
 
 // GenerateTokenPair 生成访问令牌和刷新令牌对
-func (c *Claims) GenerateTokenPair(userID string) (*TokenPair, error) {
+func (c *Claims) GenerateTokenPair(info Info) (*TokenPair, error) {
 	tokenID := uuid.New().String()
 
 	// 生成访问令牌
-	accessToken, err := c.generateAccessToken(userID, tokenID)
+	accessToken, err := c.generateAccessToken(info, tokenID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 生成刷新令牌
-	refreshToken, err := c.generateRefreshToken(userID, tokenID)
+	refreshToken, err := c.generateRefreshToken(info, tokenID)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +154,7 @@ func (c *Claims) RefreshTokenPair(refreshToken string) (*TokenPair, error) {
 	tokenID := uuid.New().String()
 
 	// 生成新的访问令牌
-	accessToken, err := c.generateAccessToken(claims.UserID, tokenID)
+	accessToken, err := c.generateAccessToken(claims.Info, tokenID)
 	if err != nil {
 		return nil, err
 	}
@@ -165,13 +172,13 @@ func (c *Claims) ParseAccessToken(tokenString string) (*Claims, error) {
 }
 
 // 添加新的工具方法用于生成 Claims
-func (c *Claims) newTokenClaims(userID, tokenID string, expiry time.Duration) Claims {
+func (c *Claims) newTokenClaims(info Info, tokenID string, expiry time.Duration) Claims {
 	return Claims{
-		UserID: userID,
+		Info: info,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID,
 			Issuer:    "xan",
-			Subject:   userID,
+			Subject:   info.UserID,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
@@ -231,13 +238,13 @@ func savePEMToFile(filePath string, pemBlock *pem.Block, perm os.FileMode) error
 }
 
 // generateAccessToken 生成访问令牌
-func (c *Claims) generateAccessToken(userID, tokenID string) (string, error) {
-	claims := c.newTokenClaims(userID, tokenID, AccessTokenExpiry)
+func (c *Claims) generateAccessToken(info Info, tokenID string) (string, error) {
+	claims := c.newTokenClaims(info, tokenID, AccessTokenExpiry)
 	return c.generateToken(claims)
 }
 
-func (c *Claims) generateRefreshToken(userID, tokenID string) (string, error) {
-	claims := c.newTokenClaims(userID, tokenID, RefreshTokenExpiry)
+func (c *Claims) generateRefreshToken(info Info, tokenID string) (string, error) {
+	claims := c.newTokenClaims(info, tokenID, RefreshTokenExpiry)
 	return c.generateToken(claims)
 }
 

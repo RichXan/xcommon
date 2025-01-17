@@ -103,7 +103,10 @@ func TestGenerateAndValidateTokenPair(t *testing.T) {
 	require.NoError(t, err)
 
 	// 生成token对
-	tokenPair, err := claims.GenerateTokenPair(testUserID)
+	tokenPair, err := claims.GenerateTokenPair(Info{
+		UserID:   testUserID,
+		Username: testUsername,
+	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, tokenPair.AccessToken)
 	assert.NotEmpty(t, tokenPair.RefreshToken)
@@ -120,7 +123,10 @@ func TestRefreshTokenPair(t *testing.T) {
 	require.NoError(t, err)
 
 	// 生成初始token对
-	originalPair, err := claims.GenerateTokenPair(testUserID)
+	originalPair, err := claims.GenerateTokenPair(Info{
+		UserID:   testUserID,
+		Username: testUsername,
+	})
 	require.NoError(t, err)
 
 	// 使用刷新令牌生成新的token对
@@ -138,7 +144,10 @@ func TestTokenExpirationScenario(t *testing.T) {
 
 	// 生成一个短期token
 	shortLivedClaims := Claims{
-		UserID: testUserID,
+		Info: Info{
+			UserID:   testUserID,
+			Username: testUsername,
+		},
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
