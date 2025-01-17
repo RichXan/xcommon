@@ -34,8 +34,8 @@ func TestSaveKeyPair(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, publicKeyData)
 
-	assert.NotNil(t, claims.privateKey)
-	assert.NotNil(t, claims.publicKey)
+	assert.NotNil(t, claims.GetPrivateKey())
+	assert.NotNil(t, claims.GetPublicKey())
 }
 
 func TestNewClaimsWithKeyPairFromPEMFile(t *testing.T) {
@@ -61,8 +61,8 @@ func TestNewClaimsWithKeyPairFromPEM(t *testing.T) {
 func TestMain(m *testing.M) {
 	code := m.Run()
 	// 注释掉清理代码
-	// os.Remove(testKeyDir + "/private.pem")
-	// os.Remove(testKeyDir + "/public.pem")
+	os.Remove(testKeyDir + "/private.pem")
+	os.Remove(testKeyDir + "/public.pem")
 	os.Exit(code)
 }
 
@@ -76,8 +76,8 @@ func TestKeyPairOperations(t *testing.T) {
 	claims := NewClaims()
 	err := claims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
-	assert.NotNil(t, claims.privateKey)
-	assert.NotNil(t, claims.publicKey)
+	assert.NotNil(t, claims.GetPrivateKey())
+	assert.NotNil(t, claims.GetPublicKey())
 
 	// 创建测试目录
 	err = os.MkdirAll(testKeyDir, 0700)
@@ -93,8 +93,8 @@ func TestKeyPairOperations(t *testing.T) {
 	newClaims := NewClaims()
 	err = newClaims.GenerateKeyPair(testKeyDir)
 	require.NoError(t, err)
-	assert.NotNil(t, newClaims.privateKey)
-	assert.NotNil(t, newClaims.publicKey)
+	assert.NotNil(t, newClaims.GetPrivateKey())
+	assert.NotNil(t, newClaims.GetPublicKey())
 }
 
 func TestGenerateAndValidateTokenPair(t *testing.T) {
@@ -107,9 +107,6 @@ func TestGenerateAndValidateTokenPair(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, tokenPair.AccessToken)
 	assert.NotEmpty(t, tokenPair.RefreshToken)
-
-	// 验证访问令牌
-	assert.True(t, claims.ValidateAccessToken(tokenPair.AccessToken))
 
 	// 解析访问令牌
 	parsedClaims, err := claims.ParseAccessToken(tokenPair.AccessToken)
@@ -151,7 +148,7 @@ func TestTokenExpirationScenario(t *testing.T) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, shortLivedClaims)
-	tokenString, err := token.SignedString(claims.privateKey)
+	tokenString, err := token.SignedString(claims.GetPrivateKey())
 	require.NoError(t, err)
 
 	// 等待令牌过期
@@ -159,7 +156,7 @@ func TestTokenExpirationScenario(t *testing.T) {
 
 	// 验证过期的访问令牌
 	_, err = claims.ParseAccessToken(tokenString)
-	assert.ErrorIs(t, err, ErrExpiredToken)
+	assert.ErrorIs(t, err, jwt.ErrTokenExpired)
 }
 
 func TestInvalidToken(t *testing.T) {
