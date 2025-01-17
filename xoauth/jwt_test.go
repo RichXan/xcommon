@@ -39,6 +39,10 @@ func TestSaveKeyPair(t *testing.T) {
 }
 
 func TestNewClaimsWithKeyPairFromPEM(t *testing.T) {
+	claims := NewClaims(nil)
+	err := claims.GenerateKeyPair(testKeyDir)
+	require.NoError(t, err)
+
 	privateKeyBytes, err := os.ReadFile(testKeyDir + "/private.pem")
 	require.NoError(t, err)
 	assert.NotEmpty(t, privateKeyBytes)
@@ -47,7 +51,10 @@ func TestNewClaimsWithKeyPairFromPEM(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, publicKeyBytes)
 
-	claims, err := NewClaimsWithKeyPairFromPEM(nil)
+	claims, err = NewClaimsWithKeyPairFromPEM(&Config{
+		PrivateKey: string(privateKeyBytes),
+		PublicKey:  string(publicKeyBytes),
+	})
 	require.NoError(t, err)
 	assert.NotNil(t, claims)
 }

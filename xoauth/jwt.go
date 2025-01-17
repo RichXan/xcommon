@@ -75,33 +75,18 @@ type Claim interface {
 
 // NewClaims 创建新的Claims实例
 func NewClaims(config *Config) Claim {
-
-	if config.TokenExpiryIn == 0 {
-		config.TokenExpiryIn = AccessTokenExpiry
-	}
-	if config.RefreshTokenExpiryIn == 0 {
-		config.RefreshTokenExpiryIn = RefreshTokenExpiry
-	}
-
+	config = checkConfig(config)
 	return &Claims{
-		Config: Config{
-			TokenExpiryIn:        AccessTokenExpiry,
-			RefreshTokenExpiryIn: RefreshTokenExpiry,
-		},
+		Config: *config,
 	}
 }
 
 func NewClaimsWithKeyPairFromPEM(config *Config) (Claim, error) {
+	config = checkConfig(config)
+
 	privateKey, publicKey, err := decodePEMBytes([]byte(config.PrivateKey), []byte(config.PublicKey))
 	if err != nil {
 		return nil, err
-	}
-
-	if config.TokenExpiryIn == 0 {
-		config.TokenExpiryIn = AccessTokenExpiry
-	}
-	if config.RefreshTokenExpiryIn == 0 {
-		config.RefreshTokenExpiryIn = RefreshTokenExpiry
 	}
 
 	config.privateKey = privateKey
@@ -200,6 +185,24 @@ func (c *Claims) newTokenClaims(info Info, tokenID string, expiry time.Duration)
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(expiry)),
 		},
 	}
+}
+
+// checkConfig 检查并返回配置
+func checkConfig(config *Config) *Config {
+	if config == nil {
+		return &Config{
+			TokenExpiryIn:        AccessTokenExpiry,
+			RefreshTokenExpiryIn: RefreshTokenExpiry,
+		}
+	}
+
+	if config.TokenExpiryIn == 0 {
+		config.TokenExpiryIn = AccessTokenExpiry
+	}
+	if config.RefreshTokenExpiryIn == 0 {
+		config.RefreshTokenExpiryIn = RefreshTokenExpiry
+	}
+	return config
 }
 
 func decodePEMBytes(privateKeyPEMBytes, publicKeyPEMBytes []byte) (ed25519.PrivateKey, ed25519.PublicKey, error) {
