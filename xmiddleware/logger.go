@@ -75,12 +75,16 @@ func Logger(logger *xlog.Logger, debug bool) gin.HandlerFunc {
 
 		// 添加请求body（如果存在）
 		if len(requestBody) > 0 {
-			logEvent.Str("request_body", formatJSON(requestBody))
+			if c.Request.Header.Get("Content-Type") == "application/json" {
+				logEvent.Str("request_body", formatJSON(requestBody))
+			}
 		}
 
 		// 添加响应body（如果存在）
 		if blw.body.Len() > 0 {
-			logEvent.Str("response_body", formatJSON(blw.body.Bytes()))
+			if c.Request.Header.Get("Content-Type") == "application/json" {
+				logEvent.Str("response_body", formatJSON(blw.body.Bytes()))
+			}
 		}
 
 		logEvent.Msg("HTTP Request")
