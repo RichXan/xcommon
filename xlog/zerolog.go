@@ -29,6 +29,7 @@ func newZeroLogger(cfg LoggerConfig) zerolog.Logger {
 	}
 	mw := io.MultiWriter(writers...)
 	l := zerolog.New(mw).With().Timestamp().Logger()
+	sugarLogger = &l
 	return l
 }
 
