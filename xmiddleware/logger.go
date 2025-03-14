@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/RichXan/xcommon/xlog"
@@ -20,6 +21,17 @@ type bodyLogWriter struct {
 func (w bodyLogWriter) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)
+}
+
+// 添加WriteString方法以确保字符串写入也被捕获
+func (w bodyLogWriter) WriteString(s string) (int, error) {
+	w.body.WriteString(s)
+	return w.ResponseWriter.WriteString(s)
+}
+
+// 确保实现了所有必要的接口
+func (w bodyLogWriter) WriteHeader(code int) {
+	w.ResponseWriter.WriteHeader(code)
 }
 
 // formatJSON 格式化JSON字符串
@@ -75,14 +87,16 @@ func Logger(logger *xlog.Logger, debug bool) gin.HandlerFunc {
 
 		// 添加请求body（如果存在）
 		if len(requestBody) > 0 && debug {
-			if c.Request.Header.Get("Content-Type") == "application/json" {
+			if strings.Contains(c.Request.Header.Get("Content-Type"), "application/json") {
 				logEvent.Str("request_body", formatJSON(requestBody))
 			}
 		}
 
 		// 添加响应body（如果存在）
 		if blw.body.Len() > 0 && debug {
-			logEvent.Str("response_body", formatJSON(blw.body.Bytes()))
+			if strings.Contains(blw.Header().Get("Content-Type"), "application/json") {
+				logEvent.Str("response_body", formatJSON(blw.body.Bytes()))
+			}
 		}
 
 		logEvent.Msg("HTTP Request")
