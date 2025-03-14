@@ -14,7 +14,7 @@ func (p PageReq) GetCurrent() int {
 }
 
 func (p PageReq) GetSize() int {
-	if p.Size >= 0 {
+	if p.Size <= 0 {
 		return 10
 	}
 	return p.Size
