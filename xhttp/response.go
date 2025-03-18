@@ -17,6 +17,7 @@ type APIResponse struct {
 	Current int         `json:"current,omitempty"`  // 当前页码
 	Size    int         `json:"size,omitempty"`     // 当前页数量
 	PerPage int         `json:"per_page,omitempty"` // 每页数量
+	HasMore bool        `json:"has_more,omitempty"` // 是否还有更多
 	Total   int64       `json:"total,omitempty"`    // 总数量
 	Data    interface{} `json:"data,omitempty"`     // 数据
 	Order   string      `json:"order,omitempty"`    // 排序字段
@@ -147,6 +148,11 @@ func (res *APIResponse) WithCurrent(current int) *APIResponse {
 
 func (res *APIResponse) WithPerPage(perPage int) *APIResponse {
 	res.PerPage = perPage
+	return res
+}
+
+func (res *APIResponse) WithHasMore(hasMore bool) *APIResponse {
+	res.HasMore = hasMore
 	return res
 }
 
